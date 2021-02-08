@@ -155,6 +155,7 @@ class Trainer():
         self.server.clients = self.clients
         # save config
         self.config = config
+    
     def train(self):
         output = sys.stdout
         if 'Output' in self.config: output = open(self.config['Output'], 'a')
@@ -163,10 +164,10 @@ class Trainer():
             for round in tqdm(range(self.config['Trainer']['Round']), desc='Communication Round', leave=False):
                 output.write('==========Round %d begin==========\n' % round)
                 time_begin = time.time()
-                self.server.train()
+                clients = self.server.train()
                 self.meters['accuracy'].append(self.server.test_accuracy())
                 time_end = time.time()
-                for client in sorted(self.clients, key=lambda x: x.id):
+                for client in sorted(clients, key=lambda x: x.id):
                     client_summary = []
                     client_summary.append('client %d' % client.id)
                     for k, v in client.meters.items():
@@ -180,10 +181,14 @@ class Trainer():
             ...
         finally:
             acc_lst = self.meters['accuracy'].data
-            acc_avg = np.mean(acc_lst[-5:])
-            acc_std = np.std(acc_lst[-5:])
+            avg_count = 5
+            acc_avg = np.mean(acc_lst[-avg_count:])
+            acc_std = np.std(acc_lst[-avg_count:])
             acc_max = np.max(acc_lst)
             output.write('==========Summary==========\n')
-            output.write('max accuracy: %.5f\n' % acc_max)
-            output.write('final accuracy: %.5f +- %.5f\n' % (acc_avg, acc_std))
+            for client in self.clients:
+                client.clone_model(self.server)
+                output.write('client %d, accuracy: %.5f\n' % (client.id, client.test_accuracy()))
+            output.write('server, max accuracy: %.5f\n' % acc_max)
+            output.write('server, final accuracy: %.5f +- %.5f\n' % (acc_avg, acc_std))
             output.write('===========================\n')
